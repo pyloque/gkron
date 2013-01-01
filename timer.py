@@ -254,7 +254,9 @@ class TaskManager(object):
         if not task_info:
             return
         _timer = TimerBuilder.build_timer(task_info.period_type, task_info.period_spec)
-        _now = datetime.now()
+        # if task is executed too fast less than 1 second, task will be repeated execute
+        # add 1s timedelta to keep bother away
+        _now = datetime.now() + timedelta(0,1)
         future_time = _timer.next_run(_now)
         if not future_time:
             self.store.remove_task(task_id)

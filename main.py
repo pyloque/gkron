@@ -22,7 +22,7 @@ def _create_cron_memory_task():
     return MemoryTask(888, 'cron', '* * * * */2 */3')
 
 def _create_cron_http_task():
-    return HttpTask('http://www.guokr.com', 'GET', None, 'cron', '* * * * * */2')
+    return HttpTask('http://www.guokr.com', 'GET', None, 'cron', '* * * * * */1')
 
 def main():
     process = Process(10)

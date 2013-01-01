@@ -47,7 +47,6 @@ class HttpTask(TaskInfo):
             urlfetch.get(self.url)
         elif self.method == 'POST':
             urlfetch.post(self.url, self.data)
-        time.sleep(1)
         print '%s %s task is running url=%s in process %d' % (datetime.now().strftime(standard_time_format), self.period_type, self.url, os.getpid())
 
     def __json__(self):
