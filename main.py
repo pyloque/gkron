@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import time
 from datetime import datetime, timedelta
 
 from process import Process
@@ -22,15 +23,16 @@ def _create_cron_memory_task():
     return MemoryTask(888, 'cron', '* * * * */2 */3')
 
 def _create_cron_http_task():
-    return HttpTask('http://www.guokr.com', 'GET', None, 'cron', '* * * * * */1')
+    return HttpTask('http://www.guokr.com', 'GET', None, 'cron', '* * * * * */2')
 
 def main():
     process = Process(10)
-    #process.add_task(_create_interval_memory_task())
-    #for i in range(1,_total):
-    #    process.add_task(_create_once_memory_task(i))
-    #process.add_task(_create_cron_memory_task())
-    process.add_task(_create_cron_http_task())
+    process.add_task(_create_interval_memory_task())
+    for i in range(1,_total):
+        process.add_task(_create_once_memory_task(i))
+    process.add_task(_create_cron_memory_task())
+    for i in range(10):
+        process.add_task(_create_cron_http_task())
     process.start()
 
 if __name__ == '__main__':
