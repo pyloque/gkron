@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+BASE=.py
+
+source ${BASE}/bin/activate
+
+bye() {
+    deactivate
+    unset BASE
+}
