@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import errno
+import random
 import socket
 import select
 import signal
@@ -19,6 +20,7 @@ class Process(object):
         self.child_num = child_num
         self.child_fds = set()
         self.child_pids = set()
+        self.child_in_busy = set()
         self.handlers = HandlerMap()
         self.buffer = Buffer()
         self.pending_task_ids = []
@@ -76,7 +78,7 @@ class Process(object):
         self.process_timer()
         r,w=[],[]
         try:
-            r,w,e=select.select(self.child_fds, self.child_fds, [], 2)
+            r,w,e=select.select(self.child_fds, self.child_fds - self.child_in_busy, [], 2)
         except select.error, ex:
             if ex[0] == errno.EINTR:
                 self.prepare_exit()
@@ -85,19 +87,20 @@ class Process(object):
                 pass
             else:
                 raise
-        for child in r:
-            msg = child.recv(1024)
-            self.buffer.append(msg)
-            while True:
-                cmd_type, cmd_param = self.buffer.next_cmd()
-                if not cmd_type:
-                    break
-                self.handlers.process_cmd(cmd_type, cmd_param)
+        random.shuffle(w)
         for child in w:
             if len(self.pending_task_ids) == 0:
                 break
             task_id = self.pending_task_ids.pop()
             self.send_child(child, 'task:%s' % task_id)
+        for child in r:
+            msg = child.recv(1024)
+            self.buffer.append(child, msg)
+            while True:
+                fd, cmd_type, cmd_param = self.buffer.next_cmd()
+                if not fd:
+                    break
+                self.handlers.process_cmd(fd, cmd_type, cmd_param)
 
     def process_timer(self):
         if self.delayed_tasks.is_empty():
@@ -111,6 +114,7 @@ class Process(object):
             self.pending_task_ids.append(task_id)
 
     def send_child(self, child, cmd):
+        self.child_in_busy.add(child)
         child.send(cmd +';')
 
     def prepare_exit(self):
@@ -139,7 +143,8 @@ class Process(object):
     def register_handlers(self):
         self.handlers.add_handler('task_finish', self.task_finish)
 
-    def task_finish(self, param):
+    def task_finish(self, fd, param):
+        self.child_in_busy.remove(fd)
         task_id = int(param)
         self.delayed_tasks.on_finish(task_id)
 
@@ -163,21 +168,22 @@ class Worker(object):
         self.handlers.add_handler('task', self.task)
 
     def command(self, cmd):
-        self.buffer.append(cmd)
+        self.buffer.append(self.parent, cmd)
         while True:
-            cmd_type, cmd_param = self.buffer.next_cmd()
+            fd, cmd_type, cmd_param = self.buffer.next_cmd()
             if not cmd_type:
                 break
-            self.handlers.process_cmd(cmd_type, cmd_param)
+            self.handlers.process_cmd(fd, cmd_type, cmd_param)
 
-    def bye(self,param):
+    def bye(self,fd,param):
         self.prepare_exit()
 
-    def task(self, param):
+    def task(self, fd, param):
         task_id = int(param)
         task_info = self.store.get_task(task_id)
-        task_info.run()
-        self.send_parent('task_finish:%s' % param)
+        if task_info:
+            task_info.run()
+        self.send_parent('task_finish:%s' % task_id)
 
     def send_parent(self, cmd):
         self.parent.send(cmd + ';')

@@ -8,3 +8,8 @@ bye() {
     deactivate
     unset BASE
 }
+
+gc() {
+    rm *.pyc
+    rm *.py~
+}

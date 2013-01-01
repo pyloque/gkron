@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 
+import os
+import time
+from datetime import datetime
+
+import urlfetch
+from timer import standard_time_format
+
 class TaskInfo(object):
 
     def __init__(self, period_type, period_spec, task_id=None):
@@ -30,7 +37,18 @@ class HttpTask(TaskInfo):
         return 'http'
 
     def run(self):
-        pass
+        try:
+            self._run()
+        except urlfetch.RequestError, ex:
+            print repr(ex)
+
+    def _run(self):
+        if self.method == 'GET':
+            urlfetch.get(self.url)
+        elif self.method == 'POST':
+            urlfetch.post(self.url, self.data)
+        time.sleep(1)
+        print '%s %s task is running url=%s in process %d' % (datetime.now().strftime(standard_time_format), self.period_type, self.url, os.getpid())
 
     def __json__(self):
         return {
@@ -50,7 +68,7 @@ class MemoryTask(TaskInfo):
         return 'memory'
 
     def run(self):
-        print '%s task is running value=%d' % (self.period_type, self.value)
+        print '%s %s task is running value=%d in process %d' % (datetime.now().strftime(standard_time_format), self.period_type, self.value, os.getpid())
 
     def __json__(self):
         return {

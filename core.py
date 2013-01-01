@@ -3,18 +3,27 @@
 class Buffer(object):
 
     def __init__(self):
-        self.stream = bytearray()
+        self.streams = {}
 
-    def append(self, msg):
-        self.stream.extend(msg)
+    def append(self, fd, msg):
+        stream = self.ensure_fd(fd)
+        stream.extend(msg)
 
-    def next_cmd(self):
-        i = self.stream.find(';')
+    def ensure_fd(self, fd):
+        stream = self.streams.get(fd, None)
+        if not stream:
+            stream = bytearray()
+            self.streams[fd] = stream
+        return stream
+
+    def next_cmd_fd(self ,fd):
+        stream = self.ensure_fd(fd)
+        i = stream.find(';')
         if i < 0:
-            return None,None
-        cmd = str(self.stream[:i])
+            return None
+        cmd = str(stream[:i])
         for k in range(i+1):
-            self.stream.pop(0)
+            stream.pop(0)
         x = cmd.split(':')
         if len(x) == 1:
             cmd_type,cmd_param=x,None
@@ -22,7 +31,15 @@ class Buffer(object):
         if not cmd_type:
             print 'illegal cmd protocal %s' % cmd
             return self.next_cmd()
-        return cmd_type, cmd_param
+        return fd, cmd_type, cmd_param
+
+    def next_cmd(self):
+        fds = self.streams.keys()
+        for fd in fds:
+            r = self.next_cmd_fd(fd)
+            if r:
+                return r
+        return None,None,None
 
 class HandlerMap(object):
 
@@ -32,14 +49,13 @@ class HandlerMap(object):
     def add_handler(self, cmd_type, handler):
         self.handlers[cmd_type] = handler
 
-    def process_cmd(self, cmd_type, cmd_param):
-        print '*' *10, cmd_type, cmd_param
+    def process_cmd(self, fd, cmd_type, cmd_param):
         handler = self.handlers.get(cmd_type, None)
         if handler:
-            handler(cmd_param)
+            handler(fd,cmd_param)
         else:
-            self.default(cmd_type, cmd_param)
+            self.default(fd, cmd_type, cmd_param)
 
-    def default(self, cmd_type, cmd_param):
-        print 'Unknown command %s %s' % (cmd_type,cmd_param)
+    def default(self, fd, cmd_type, cmd_param):
+        print 'Unknown command %s %s from %s' % (cmd_type,cmd_param, fd)
 
