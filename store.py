@@ -87,6 +87,8 @@ class RedisTaskStore(RedisTaskFetcher, TaskSaver, TaskLoader):
         for task_raw in task_raws:
             task_json = eval(task_raw)
             task = TaskBuilder.from_json(task_json)
+            if not task:
+                continue
             tasks[task.id] = task
         return tasks
 

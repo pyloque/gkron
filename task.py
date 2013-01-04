@@ -87,7 +87,7 @@ class TaskBuilder(object):
         else:
             task_cls = None
         if not task_cls:
-            print 'illegal task format'
+            print 'illegal task format %s' % repr(r)
             return None
         task_id = r.pop('id')
         period_type = r.pop('period_type')
