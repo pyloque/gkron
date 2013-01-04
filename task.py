@@ -10,9 +10,9 @@ from timer import standard_time_format
 class TaskInfo(object):
 
     def __init__(self, period_type, period_spec, task_id=None):
-        self.id = task_id
         self.period_type = period_type
         self.period_spec = period_spec
+        self.id = task_id
 
     def json(self):
         r = {
@@ -26,11 +26,11 @@ class TaskInfo(object):
 
 class HttpTask(TaskInfo):
 
-    def __init__(self, url, method, data, period_type, period_spec, task_id=None):
+    def __init__(self, period_type, period_spec, task_id=None, **kwargs):
         super(HttpTask, self).__init__(period_type, period_spec, task_id)
-        self.url = url
-        self.method = method
-        self.data = data
+        self.url = kwargs.get('url')
+        self.method = kwargs.get('method', 'GET')
+        self.data = kwargs.get('data', None)
 
     @property
     def task_type(self):
@@ -58,9 +58,9 @@ class HttpTask(TaskInfo):
 
 class MemoryTask(TaskInfo):
 
-    def __init__(self, value, period_type, period_spec, task_id=None):
+    def __init__(self, period_type, period_spec, task_id=None, **kwargs):
         super(MemoryTask, self).__init__(period_type, period_spec, task_id)
-        self.value = value
+        self.value = kwargs.get('value')
 
     @property
     def task_type(self):
@@ -78,10 +78,18 @@ class TaskBuilder(object):
 
     @staticmethod
     def from_json(r):
-        task_type = r['task_type']
+        task_type = r.pop('task_type')
+        task_cls = None
         if task_type == 'memory':
-            return MemoryTask(r['value'], r['period_type'], r['period_spec'], r['id'])
+            task_cls = MemoryTask
         elif task_type == 'http':
-            return HttpTask(r['url'], r['method'], r['data'], r['period_type'], r['period_spec'], r['id'])
+            task_cls = HttpTask
         else:
+            task_cls = None
+        if not task_cls:
+            print 'illegal task format'
             return None
+        task_id = r.pop('id')
+        period_type = r.pop('period_type')
+        period_spec = r.pop('period_spec')
+        return task_cls(period_type, period_spec, task_id, **r)

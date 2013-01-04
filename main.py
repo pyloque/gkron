@@ -14,16 +14,16 @@ _delta = timedelta(0, 1)
 _total = 14 * 10
 
 def _create_interval_memory_task():
-    return MemoryTask(999, 'interval', '%s/%s/%s' % ((_now + _delta).strftime(standard_time_format), 2, (_now + _delta * _total).strftime(standard_time_format)))
+    return MemoryTask('interval', '%s/%s/%s' % ((_now + _delta).strftime(standard_time_format), 2, (_now + _delta * _total).strftime(standard_time_format)), value=999)
 
 def _create_once_memory_task(k):
-    return MemoryTask(k, 'once', (_now + _delta * k).strftime(standard_time_format))
+    return MemoryTask('once', (_now + _delta * k).strftime(standard_time_format), value=k)
 
 def _create_cron_memory_task():
-    return MemoryTask(888, 'cron', '* * * * */2 */3')
+    return MemoryTask('cron', '* * * * */2 */3', value=888)
 
 def _create_cron_http_task():
-    return HttpTask('http://www.guokr.com', 'GET', None, 'cron', '* * * * * */2')
+    return HttpTask('cron', '* * * * * */2', url='http://www.guokr.com', method='GET')
 
 def main():
     process = Process(10)
