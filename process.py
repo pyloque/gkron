@@ -10,19 +10,21 @@ import select
 import signal
 from datetime import datetime, timedelta
 
+from setproctitle import setproctitle
+
 from core import Buffer, HandlerMap
 from timer import TaskManager
 from store import RedisTaskStore
 from daemon import daemon_init
 from worker import Worker
 
+
 class Process(object):
 
     def __init__(self, child_num):
         self.child_num = child_num
-        self.child_fds = set()
-        self.child_pids = set()
-        self.child_in_busy = set()
+        self.child_map = {} # pid=>fd
+        self.child_fd_in_busy = set()
         self.handlers = HandlerMap()
         self.buffer = Buffer()
         self.pending_task_ids = []
@@ -61,16 +63,20 @@ class Process(object):
 
     def child(self, parent, child):
         child.close()
+        setproctitle('gkron worker')
         Worker(parent, self.store).start()
         sys.exit(0)
 
     def father(self, pid, parent, child):
         parent.close()
-        self.child_fds.add(child)
-        self.child_pids.add(pid)
+        self.child_map[pid] = child
+        setproctitle('gkron master')
 
     def wait_children_to_die(self):
-        for pid in self.child_pids:
+        child_fds = self.child_map.values()
+        for child in child_fds:
+            self.send_child(child, 'bye:')
+        for pid in self.child_map:
             try:
                 os.waitpid(pid, os.P_WAIT)
             except OSError, ex:
@@ -83,8 +89,9 @@ class Process(object):
     def interact(self):
         self.process_timer()
         r,w=[],[]
+        child_fds = set(self.child_map.values())
         try:
-            r,w,e=select.select(self.child_fds, self.child_fds - self.child_in_busy, [], 2)
+            r,w,e=select.select(child_fds, child_fds - self.child_fd_in_busy, [], 2)
         except select.error, ex:
             if ex[0] == errno.EINTR:
                 self.prepare_exit()
@@ -120,37 +127,33 @@ class Process(object):
             self.pending_task_ids.append(task_id)
 
     def send_child(self, child, cmd):
-        self.child_in_busy.add(child)
+        self.child_fd_in_busy.add(child)
         child.send(cmd +';')
-
-    def prepare_exit(self):
-        print 'ctrl+c is catched'
-        for child in self.child_fds:
-            try:
-                child.send('bye:')
-            except IOError, ex:
-                if ex[0] == errno.EPIPE:
-                    pass
-                else:
-                    raise
-        self.stoped = True
 
     def register_signals(self):
         signal.signal(signal.SIGINT, self.int_handler)
         signal.signal(signal.SIGCHLD, self.child_exit_handler)
+        signal.signal(signal.SIGTERM, self.quit_handler)
 
-    def int_handler(self,signum,frame):
-        print 'int signal catched %s %s' %(signum, frame)
-        self.prepare_exit()
+    def quit_handler(self, signum, frame):
+        self.stoped = True
+
+    def int_handler(self, signum, frame):
+        self.stoped = True
 
     def child_exit_handler(self, signum, frame):
         print 'child exit signal catched %s %s' %(signum, frame)
+        while True:
+            pid,status = os.waitpid(-1, os.WNOHANG)
+            if pid <=0:
+                break
+            del self.child_map[pid]
 
     def register_handlers(self):
         self.handlers.add_handler('task_finish', self.task_finish)
 
     def task_finish(self, fd, param):
-        self.child_in_busy.remove(fd)
+        self.child_fd_in_busy.remove(fd)
         task_id = int(param)
         self.delayed_tasks.on_finish(task_id)
 
